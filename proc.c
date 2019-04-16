@@ -36,7 +36,6 @@ int countRunnableThreads(struct proc *p)
 
 void finishAllThreads(){
   struct proc *curproc = myproc();
-  struct thread *currthread = mythread();
   
   acquire(&ptable.lock);
 
@@ -113,6 +112,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
+  struct thread *t;
 
   acquire(&ptable.lock);
 
@@ -124,13 +124,11 @@ allocproc(void)
   return 0;
 
 found:
-  struct thread *t;
-
   p->state = INUSED;
   p->pid = nextpid++;
 
   for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++)
-    if(t->state == UNUSED){
+    if(t->state == T_UNUSED){
       t->state = EMBRYO;
       t->tid = nexttid++;
       t->proc = p;
@@ -221,7 +219,7 @@ growproc(int n)
       return -1;
   }
   curproc->sz = sz;
-  switchuvm(curproc);
+  switchuvm(mythread());
   return 0;
 }
 
@@ -284,7 +282,6 @@ exit(void)
 {
   struct proc *curproc = myproc();
   struct thread *currthread = mythread();
-  struct thread *t;
   struct proc *p;
   int fd;
 
@@ -345,7 +342,6 @@ wait(void)
   struct thread *t;
   int havekids, pid;
   struct proc *curproc = myproc();
-  struct thread *curthread;
   
   acquire(&ptable.lock);
   for(;;){
@@ -416,33 +412,32 @@ scheduler(void)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != INUSED)
         continue;
-
+    currthread = 0;
       // Loop over process threads looking for thread to run
-    for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
-        if(t->state != RUNNABLE)
-          continue;
-      currthread = t;
-    }
-
+      for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
+          if(t->state != RUNNABLE)
+            continue;
+        currthread = t;
+      }
       // Thread not found, move to the next process
-    if( currthread == 0 )
-      continue;
-      
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      c->thread = t;
-      switchuvm(p);
-      t->state = RUNNING;
+      if ( currthread != 0 )
+      {      
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = p;
+        c->thread = t;
+        switchuvm(t);
+        t->state = RUNNING;
 
-      swtch(&(c->scheduler), t->context);
-      switchkvm();
+        swtch(&(c->scheduler), t->context);
+        switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-      c->thread = 0;
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        c->thread = 0;
+      }
     }
     release(&ptable.lock);
 
@@ -460,14 +455,13 @@ void
 sched(void)
 {
   int intena;
-  struct proc *p = myproc();
   struct thread *t = mythread();
 
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
   if(mycpu()->ncli != 1)
     panic("sched locks");
-  if(p->state == RUNNING)
+  if(t->state == RUNNING)
     panic("sched running");
   if(readeflags()&FL_IF)
     panic("sched interruptible");
@@ -481,7 +475,8 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  myproc()->state = INUSED;
+  mythread()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
 }
@@ -586,10 +581,13 @@ kill(int pid)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
+      struct thread *t;
+      for (t = p->pthreads; t < &p->pthreads[NTHREAD]; t++){
+        if (t->state == SLEEPING)
+          t->state = RUNNABLE;
+      }
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
       release(&ptable.lock);
       return 0;
     }
@@ -629,7 +627,7 @@ procdump(void)
     cprintf("%d %s %s", p->pid, state, p->name);
     
     for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
-      if(p->state == T_UNUSED)
+      if(t->state == T_UNUSED)
         continue;
       if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
         state = states[p->state];
