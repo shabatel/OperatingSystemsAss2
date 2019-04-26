@@ -12,7 +12,7 @@ struct cpu {
   struct thread *thread;       // The thread running on this cpu or null
 };
 
-  enum threadstate { T_UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, T_ZOMBIE };
+  enum threadstate { T_UNUSED, T_EMBRYO, SLEEPING, RUNNABLE, RUNNING, T_ZOMBIE };
 
 struct thread {
   char *kstack;                // Bottom of kernel stack for this process
@@ -46,7 +46,7 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, INUSED, ZOMBIE };
+enum procstate { UNUSED, EMBRYO, INUSED, ZOMBIE };
 
 // Per-process state
 struct proc {

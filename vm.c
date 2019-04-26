@@ -154,13 +154,13 @@ switchkvm(void)
 
 // Switch TSS and h/w page table to correspond to process p.
 void
-switchuvm(struct thread *t)
+switchuvm(struct proc *p, struct thread *t)
 {
-  if(t == 0)
+  if(p == 0)
     panic("switchuvm: no process");
   if(t->kstack == 0)
     panic("switchuvm: no kstack");
-  if(t->proc->pgdir == 0)
+  if(p->pgdir == 0)
     panic("switchuvm: no pgdir");
 
   pushcli();
