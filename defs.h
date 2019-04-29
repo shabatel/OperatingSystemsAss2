@@ -4,6 +4,8 @@ struct file;
 struct inode;
 struct pipe;
 struct proc;
+struct thread;
+struct kthread_mutex_t;
 struct rtcdate;
 struct spinlock;
 struct sleeplock;

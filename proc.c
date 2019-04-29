@@ -8,6 +8,8 @@
 #include "spinlock.h"
 #include "kthread.h"
 
+// static struct kthread_mutex_t mutex_arr[MAX_MUTEXES];   // Global static array to hold the mutex objects
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -15,8 +17,14 @@ struct {
 
 static struct proc *initproc;
 
+struct {
+	struct spinlock lock;	
+	struct kthread_mutex_t mutex_arr[MAX_MUTEXES];
+} mtable;
+
 int nextpid = 1;
 int nexttid = 1;
+int nextmid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -773,7 +781,7 @@ int kthread_join(int thread_id) {
     return -1;
   }
 
-  if (t->state == T_ZOMBIE) {
+  if (t->state == T_ZOMBIE) {				//TODO: add release?
     return 0;
   }
 
@@ -790,3 +798,109 @@ int kthread_join(int thread_id) {
   return 0;
 }
 
+int kthread_mutex_alloc(){
+	struct kthread_mutex_t *mut;
+
+	acquire(&mtable.lock);
+
+	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++)
+		if (mut->state == M_UNUSED)
+			goto found;
+
+	release(&ptable.lock);
+	return -1;
+
+	found:
+	mut->state = M_INUSE;
+	mut->locked = 0;	
+	mut->mid = nextmid++;
+	mut->thread = mythread();
+
+	release(&mtable.lock);
+
+	return mut->mid;
+}
+
+int kthread_mutex_dealloc(int mutex_id){
+	struct kthread_mutex_t *mut;
+	
+	acquire(&mtable.lock);
+
+	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++){
+		if (mut->mid == mutex_id){
+			if(!(mut->locked)){						//The given mutex is currently unlocked
+				mut->state = M_UNUSED;
+				mut->thread = 0;
+				release(&mtable.lock);
+				return 0;
+			}
+		}
+	}
+	release(&mtable.lock);					// dealloc failed
+	return -1;
+}
+
+int kthread_mutex_lock(int mutex_id){
+	struct kthread_mutex_t *mut;
+	struct thread *currThread = mythread();
+	
+	acquire(&mtable.lock);
+	
+	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
+    if (mut->mid == mutex_id)
+			goto found;
+	}
+	release(&mtable.lock);							// not found
+	return -1;
+
+	found:
+
+	if (mut->state == M_UNUSED){				// the mutex is unused, failed.
+		release(&mtable.lock);
+		return -1;
+	}
+
+  while (mut->locked) {
+    sleep(mut, &mtable.lock);
+  }
+  mut->locked = 1;
+  mut->thread = currThread;
+
+	release(&mtable.lock);
+	return 0;
+}
+
+int kthread_mutex_unlock(int mutex_id){
+	struct kthread_mutex_t *mut;
+	//struct thread *currThread = mythread();
+	
+	acquire(&mtable.lock);
+	
+	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
+    if (mut->mid == mutex_id)
+			goto found;
+	}
+	release(&mtable.lock);							// not found
+	return -1;
+
+	found: 
+
+	if (mut->state == M_UNUSED || !(mut->locked)){				// the mutex is unused or unlocked, failed.
+		release(&mtable.lock);
+		return -1;
+	}
+
+	if(mut->locked){
+			if(mut->thread == mythread()){			// the calling thread is the owner thread 
+				mut->locked = 0;
+				mut->thread = 0;
+				wakeup(mut);						// TODO: dont know  how got the mutex in order to update 
+				
+				release(&mtable.lock);
+				return 0;
+			}	
+	}
+	
+	release(&mtable.lock);
+	return -1;
+}
