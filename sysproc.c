@@ -107,13 +107,14 @@ int sys_kthread_join(void) {
   return kthread_join(thread_id);
 }
 int sys_kthread_create(void) {
-  return 0;
-//  void* start_func;
-//  void* stack;
-//
-//  if(argint(0, &start_func) < 0)
-//    return -1;
-//  if(argint(1, &stack) < 0)
-//    return -1;
-//  return kthread_create(start_func, stack);
+  void *stack;
+  void (*start_func)();
+
+  if (argptr(0, (char **) &start_func, 0) < 0)
+    return -1;
+
+  if(argptr(1, (void *) &stack, 0) < 0)
+    return -1;
+
+  return kthread_create(start_func, stack);
 }
