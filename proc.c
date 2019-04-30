@@ -4,10 +4,9 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "x86.h"
-#include "proc.h"
 #include "spinlock.h"
+#include "proc.h"
 #include "kthread.h"
-#include "tournament_tree.h"
 
 // static struct kthread_mutex_t mutex_arr[MAX_MUTEXES];   // Global static array to hold the mutex objects
 
@@ -19,7 +18,7 @@ struct {
 static struct proc *initproc;
 
 struct {
-	struct spinlock lock;
+  struct spinlock lock;
 	struct kthread_mutex_t mutex_arr[MAX_MUTEXES];
 } mtable;
 
@@ -904,13 +903,4 @@ int kthread_mutex_unlock(int mutex_id){
 
 	release(&mtable.lock);
 	return -1;
-}
-
-    //task 3.2
-
-trnmnt_tree* trnmnt_tree_alloc(int depth){
-    if (depth < 1)          //invalid depth
-        return 0;
-    struct trnmnt_tree *tree;
-    tree->nodes = (int*) malloc(((1 << depth) -1) * sizeof(int));
 }

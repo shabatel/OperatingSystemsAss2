@@ -70,7 +70,7 @@ struct kthread_mutex_t {
   struct spinlock lock;           // Spinlock protecting this mutex
   int mid;                        // Mutex id
   enum mutexstate state;           // Mutex state
-  struct thread *thread;          // the owner thread 
+  struct thread *thread;          // the owner thread
 
 };
 

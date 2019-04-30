@@ -27,6 +27,7 @@ OBJS = \
 	uart.o\
 	vectors.o\
 	vm.o\
+	tournament_tree.o\
 
 # Cross-compiling (e.g., on Mac OS X)
 TOOLPREFIX = i386-elf-
