@@ -1,6 +1,8 @@
 #define MAX_STACK_SIZE 4000
 #define MAX_MUTEXES 64
 
+typedef struct {} trnmnt_tree;
+
 /********************************
         The API of the KLT package
  ********************************/
