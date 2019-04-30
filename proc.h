@@ -67,7 +67,7 @@ enum mutexstate { M_UNUSED, M_INUSE };
 struct kthread_mutex_t {
   uint locked;                    // Is the lock held?
 
-  // struct spinlock lock;           // Spinlock protecting this sleep lock
+  struct spinlock lock;           // Spinlock protecting this mutex
   int mid;                        // Mutex id
   enum mutexstate state;           // Mutex state
   struct thread *thread;          // the owner thread 

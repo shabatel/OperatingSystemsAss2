@@ -7,6 +7,7 @@
 #include "proc.h"
 #include "spinlock.h"
 #include "kthread.h"
+#include "tournament_tree.h"
 
 // static struct kthread_mutex_t mutex_arr[MAX_MUTEXES];   // Global static array to hold the mutex objects
 
@@ -842,12 +843,12 @@ int kthread_mutex_dealloc(int mutex_id){
 
 int kthread_mutex_lock(int mutex_id){
 	struct kthread_mutex_t *mut;
-	struct thread *currThread = mythread();
+	//struct thread *currThread = mythread();
 	
 	acquire(&mtable.lock);
 	
 	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
-    if (mut->mid == mutex_id)
+        if (mut->mid == mutex_id)
 			goto found;
 	}
 	release(&mtable.lock);							// not found
@@ -860,11 +861,11 @@ int kthread_mutex_lock(int mutex_id){
 		return -1;
 	}
 
-  while (mut->locked) {
-    sleep(mut, &mtable.lock);
-  }
-  mut->locked = 1;
-  mut->thread = currThread;
+    while (mut->locked) {
+        sleep(mut, &mut->lock);
+    }
+    mut->locked = 1;
+    mut->thread = mythread();
 
 	release(&mtable.lock);
 	return 0;
@@ -877,7 +878,7 @@ int kthread_mutex_unlock(int mutex_id){
 	acquire(&mtable.lock);
 	
 	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
-    if (mut->mid == mutex_id)
+         if (mut->mid == mutex_id)
 			goto found;
 	}
 	release(&mtable.lock);							// not found
@@ -891,16 +892,25 @@ int kthread_mutex_unlock(int mutex_id){
 	}
 
 	if(mut->locked){
-			if(mut->thread == mythread()){			// the calling thread is the owner thread 
-				mut->locked = 0;
-				mut->thread = 0;
-				wakeup(mut);						// TODO: dont know  how got the mutex in order to update 
-				
-				release(&mtable.lock);
-				return 0;
-			}	
+        if(mut->thread == mythread()){			// the calling thread is the owner thread
+            mut->locked = 0;
+            mut->thread = 0;
+            wakeup(mut);
+
+            release(&mtable.lock);
+            return 0;
+        }
 	}
 	
 	release(&mtable.lock);
 	return -1;
+}
+
+    //task 3.2
+
+trnmnt_tree* trnmnt_tree_alloc(int depth){
+    if (depth < 1)          //invalid depth
+        return 0;
+    struct trnmnt_tree *tree;
+    tree->nodes = (int*) malloc(((1 << depth) -1) * sizeof(int));
 }
