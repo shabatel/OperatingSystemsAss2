@@ -1,5 +1,4 @@
 #include "types.h"
-#include "stat.h"
 #include "user.h"
 #include "tournament_tree.h"
 
@@ -10,9 +9,9 @@ int nextTreeId = 1;
 struct trnmnt_tree* trnmnt_tree_alloc(int depth) {
   if (depth < 1)          //invalid depth
     return 0;
-   struct trnmnt_tree *tree;
+  struct trnmnt_tree *tree;
   tree->id = nextTreeId++;
-  // tree->nodes = malloc(((1 << depth) -1) * sizeof(int));
+  tree->nodes = malloc((depth-1)*sizeof(int)*sizeof(int)); // contains all the mutex ids with alloc
   return tree;
 }
 
