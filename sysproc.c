@@ -7,7 +7,6 @@
 #include "mmu.h"
 #include "spinlock.h"
 #include "proc.h"
-#include "kthread.h"
 
 int
 sys_fork(void)
@@ -92,30 +91,33 @@ sys_uptime(void)
   return xticks;
 }
 
-int sys_kthread_id(void) {
-  return mythread()->tid;
-}
-
-int sys_kthread_exit(void) {
-  kthread_exit();
-  return 0;  // not reached
-}
-int sys_kthread_join(void) {
-  int thread_id;
-
-  if(argint(0, &thread_id) < 0)
-    return -1;
-  return kthread_join(thread_id);
-}
 int sys_kthread_create(void) {
   void *stack;
   void (*start_func)();
 
-  if (argptr(0, (char **) &start_func, 0) < 0)
+  if (argptr(0, (void*) &start_func, sizeof(*start_func)) < 0)
     return -1;
 
-  if(argptr(1, (void *) &stack, 0) < 0)
+  if(argptr(1, (void *) &stack, sizeof(*stack)) < 0)
     return -1;
 
   return kthread_create(start_func, stack);
 }
+
+int sys_kthread_id(void) {
+    return mythread()->tid;
+}
+
+int sys_kthread_exit(void) {
+    kthread_exit();
+    return 0;  // not reached
+}
+
+int sys_kthread_join(void) {
+    int thread_id;
+
+    if(argint(0, &thread_id) < 0)
+        return -1;
+    return kthread_join(thread_id);
+}
+
