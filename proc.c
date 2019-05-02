@@ -47,7 +47,7 @@ int countRunnableThreads(struct proc *p)
 		if (t->state != T_UNUSED && t->state != T_ZOMBIE)
 			counter++;
 		else {
-			t->killed = 0;
+			t->killed = 1;
   	}
 	}
   return counter;
@@ -128,7 +128,7 @@ struct thread* searchThreadByStatus(struct proc *p, enum threadstate state) {
 	for(t = p->pthreads; t < &p->pthreads[NTHREAD]; t++)
 		if (t->state == state)
 			return t;
-	return -1;
+	return 0;
 }
 
 //PAGEBREAK: 32
@@ -699,7 +699,7 @@ int kthread_create(void (*start_func)(), void* stack) {
       acquire(&ptable.lock);
     }
   t = searchThreadByStatus(myproc(), T_UNUSED);
-  if(t == -1) { // no space available to use
+  if(t == 0) { // no space available to use
     return -1;
   }
   t->state = T_EMBRYO;
