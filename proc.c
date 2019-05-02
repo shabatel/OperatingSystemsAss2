@@ -835,34 +835,33 @@ int kthread_join(int thread_id) {
     return -1;
   }
 
-  if(t->state == T_UNUSED){
-    release(&ptable.lock);
-    return -1;
-  }
 
   if(t->state == T_ZOMBIE){
 		kfree(t->kstack);
 		t->kstack = 0;
+    t->killed = 0;
+    t->tid = 0;
 		t->state = T_UNUSED;
 		release(&ptable.lock);
 
     return 0;
   }
 
-	while ((t->state != T_ZOMBIE) && (t->state != T_UNUSED)) {
+	if (t->state != T_UNUSED) {
 		sleep(t, &ptable.lock);
-		if (currProc->killed != 0) {
-			release(&ptable.lock);
-			return -1;
-		}
-	}
+    kfree(t->kstack);
+    t->kstack = 0;
+    t->killed = 0;
+    t->tid = 0;
+    t->state = T_UNUSED;
 
-	kfree(t->kstack);
-	t->kstack = 0;
-	t->state = T_UNUSED;
+    release(&ptable.lock);
+    return 0;
+  }
+
   release(&ptable.lock);
 
-  return 0;
+  return -1;
 }
 
 int kthread_mutex_alloc(){
