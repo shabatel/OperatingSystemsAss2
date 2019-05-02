@@ -11,7 +11,6 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct kthread;
 
 // bio.c
 void            binit(void);
@@ -124,17 +123,6 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-void            lockPtable(void);
-void            releasePtable(void);
-int             kthread_create(void (*start_func)(), void*);
-int             kthread_id(void);
-void            kthread_exit(void);
-int             kthread_join(int);
-int             kthread_mutex_alloc(void);
-int             kthread_mutex_dealloc(int);
-int             kthread_mutex_lock(int);
-int             kthread_mutex_unlock(int);
-
 
 // swtch.S
 void            swtch(struct context**, struct context*);

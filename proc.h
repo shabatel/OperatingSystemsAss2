@@ -1,5 +1,4 @@
 #define NTHREAD 16  //  the max num of threads each proc can hold.
-#define MAX_MUTEXES 64
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -22,8 +21,7 @@ struct thread {
   struct context *context;     // swtch() here to run process
   void *chan;                  // If non-zero, sleeping on chan
   int tid;                     // thread ID
-  struct proc *proc;           // the proc
-  int killed;
+  struct proc *proc;           // the proc  
 };
 
 extern struct cpu cpus[NCPU];
