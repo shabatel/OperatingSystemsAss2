@@ -30,16 +30,26 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void lockPtable(void){
+  acquire(&ptable.lock);
+}
+
+void releasePtable(void){
+  release(&ptable.lock);
+}
+
 int countRunnableThreads(struct proc *p)
 {
   struct thread *t;
   int counter = 0;
   //Loop over threads table looking for threads
-  for (t = p->pthreads; t < &p->pthreads[NTHREAD]; t++)
-  {
-	if (t->state != T_UNUSED && t->state != T_ZOMBIE)
-	  counter++;
-  }
+  for (t = p->pthreads; t < &p->pthreads[NTHREAD]; t++) {
+		if (t->state != T_UNUSED && t->state != T_ZOMBIE)
+			counter++;
+		else {
+			t->killed = 0;
+  	}
+	}
   return counter;
 }
 
@@ -158,6 +168,7 @@ allocproc(void) {
 	t->state = T_EMBRYO;
 	t->tid = nexttid++;
 	t->proc = p;
+	t->killed = 0;
 
 	// Allocate kernel stack.
 	if ((t->kstack = kalloc()) == 0) {
@@ -496,6 +507,9 @@ sched(void)
 void
 yield(void)
 {
+	if(mythread()->killed){
+		kthread_exit();
+	}
       if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
     }  //DOC: yieldlock

@@ -123,6 +123,8 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            lockPtable(void);
+void            releasePtable(void);
 int             kthread_create(void (*start_func)(), void* stack);
 int             kthread_id();
 void            kthread_exit();
