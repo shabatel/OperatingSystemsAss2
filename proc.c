@@ -128,7 +128,7 @@ struct thread* searchThreadByStatus(struct proc *p, enum threadstate state) {
 	for(t = p->pthreads; t < &p->pthreads[NTHREAD]; t++)
 		if (t->state == state)
 			return t;
-	return 0;
+	return -1;
 }
 
 //PAGEBREAK: 32
@@ -699,6 +699,9 @@ int kthread_create(void (*start_func)(), void* stack) {
       acquire(&ptable.lock);
     }
   t = searchThreadByStatus(myproc(), T_UNUSED);
+  if(t == -1) { // no space available to use
+    return -1;
+  }
   t->state = T_EMBRYO;
   t->tid = nexttid++;
   t->proc = curproc;
