@@ -21,7 +21,8 @@ struct thread {
   struct context *context;     // swtch() here to run process
   void *chan;                  // If non-zero, sleeping on chan
   int tid;                     // thread ID
-  struct proc *proc;           // the proc  
+  struct proc *proc;           // the proc
+  int killed;                  // If 1 have been killed
 };
 
 extern struct cpu cpus[NCPU];

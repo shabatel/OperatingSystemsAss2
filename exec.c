@@ -20,8 +20,23 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
   struct thread *currthread = mythread();
+  struct thread *t;
 
-  finishAllThreads();
+  lockPtable();
+
+  for(t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
+    if (t->tid != currthread->tid)
+      t->killed = 1;
+  }
+
+  releasePtable();
+
+  for(t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
+    if (t->tid != currthread->tid){
+      kthread_join(t->tid);
+      kthread_join(t->tid);
+    }
+  }
 
   begin_op();
 
