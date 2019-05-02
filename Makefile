@@ -28,8 +28,6 @@ OBJS = \
 	vectors.o\
 	vm.o\
 
-# Cross-compiling (e.g., on Mac OS X)
-TOOLPREFIX = i386-elf-
 
 # Using native tools (e.g., on X86 Linux)
 #TOOLPREFIX = 

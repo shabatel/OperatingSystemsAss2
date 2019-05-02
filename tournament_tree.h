@@ -7,7 +7,7 @@ struct trnmnt_tree {
   int* mutexNodes;
   int currentNumberOfThreads;
   int currentNumberOfWaitings;
-  struct spinlock lock;
+  //struct spinlock lock;
 };
 
 
