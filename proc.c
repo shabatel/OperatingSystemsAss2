@@ -835,25 +835,33 @@ int kthread_join(int thread_id) {
     return -1;
   }
 
-  if(t->state == UNUSED){
+  if(t->state == T_UNUSED){
     release(&ptable.lock);
     return -1;
   }
 
-  if(t->state == ZOMBIE){
-    kfree(t->kstack);
-    t->state = UNUSED;
-    release(&ptable.lock);
+  if(t->state == T_ZOMBIE){
+		kfree(t->kstack);
+		t->kstack = 0;
+		t->state = T_UNUSED;
+		release(&ptable.lock);
+
     return 0;
   }
 
-  mythread()->state = SLEEPING;
-  mythread()->chan = myproc();
-  sched();
+	while ((t->state != T_ZOMBIE) && (t->state != T_UNUSED)) {
+		sleep(t, &ptable.lock);
+		if (currProc->killed != 0) {
+			release(&ptable.lock);
+			return -1;
+		}
+	}
+
+	kfree(t->kstack);
+	t->kstack = 0;
+	t->state = T_UNUSED;
   release(&ptable.lock);
 
-  // recursive join to make sure the one who wake  the thread up is the right one
-  kthread_join(thread_id);
   return 0;
 }
 
