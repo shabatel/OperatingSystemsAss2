@@ -1,4 +1,5 @@
 #define NTHREAD 16  //  the max num of threads each proc can hold.
+#define MAX_MUTEXES 64
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
