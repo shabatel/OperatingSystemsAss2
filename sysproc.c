@@ -119,3 +119,25 @@ int sys_kthread_create(void) {
 
   return kthread_create(start_func, stack);
 }
+
+int sys_kthread_mutex_alloc(void){
+  return kthread_mutex_alloc();
+}
+int sys_kthread_mutex_dealloc(void){
+  int mutex_id;
+  if(argint(0,&mutex_id) < 0)
+    return -1;
+  return kthread_mutex_dealloc(mutex_id);
+}
+int sys_kthread_mutex_lock(void){
+  int mutex_id;
+  if(argint(0,&mutex_id) < 0)
+    return -1;
+  return kthread_mutex_dealloc(mutex_id);
+}
+int sys_kthread_mutex_unlock(void) {
+  int mutex_id;
+  if (argint(0, &mutex_id) < 0)
+    return -1;
+  return kthread_mutex_dealloc(mutex_id);
+}
