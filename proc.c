@@ -30,6 +30,14 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void lockPtable(void){
+  acquire(&ptable.lock);
+}
+
+void releasePtable(void){
+  release(&ptable.lock);
+}
+
 int countRunnableThreads(struct proc *p)
 {
   struct thread *t;
@@ -154,6 +162,7 @@ allocproc(void) {
 	t->state = T_EMBRYO;
 	t->tid = nexttid++;
 	t->proc = p;
+  t->killed = 0;
 
 	// Allocate kernel stack.
 	if ((t->kstack = kalloc()) == 0) {
@@ -307,6 +316,11 @@ exit(void) {
 
   while (countRunnableThreads(curproc) > 1) {
     sched();
+  }
+
+  struct thread *t;
+  for(t = curproc->threads; t < &curproc->threads[NTHREAD]; t++) {
+    t->killed = 1;
   }
 
   release(&ptable.lock);
