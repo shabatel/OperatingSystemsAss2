@@ -763,7 +763,6 @@ int kthread_join(int thread_id) {
   struct thread *t;
 
   if(thread_id == mythread()->tid) {
-      cprintf(" in JOIN \n");
     return -1;
   }
 
@@ -807,19 +806,18 @@ int kthread_join(int thread_id) {
 int kthread_mutex_alloc(){
 	struct kthread_mutex_t *mut;
 	acquire(&mtable.lock);
-
 	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++)
 		if (mut->state == M_UNUSED)
 			goto found;
 
-	release(&ptable.lock);
+	release(&mtable.lock);
 	return -1;
 
 	found:
 	mut->state = M_INUSE;
 	mut->locked = 0;
 	mut->mid = nextmid++;
-	mut->thread = mythread();
+//	mut->thread = mythread();
 
 	release(&mtable.lock);
 
@@ -833,12 +831,21 @@ int kthread_mutex_dealloc(int mutex_id){
 
 	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++){
 		if (mut->mid == mutex_id){
-			if(!(mut->locked)){						//The given mutex is currently unlocked
+			if(mut->locked || mut->state == M_UNUSED || mut->thread != 0){
+                release(&mtable.lock);					// dealloc failed
+                return -1;
+			}
+
+
+
+//		    if(!(mut->locked) && mut->state != M_UNUSED && mut->thread == 0){			//we can dealloc the mutex
 				mut->state = M_UNUSED;
 				mut->thread = 0;
+				mut->mid = 0;
+				mut->locked = 0;
 				release(&mtable.lock);
 				return 0;
-			}
+//			}
 		}
 	}
 	release(&mtable.lock);					// dealloc failed
@@ -847,9 +854,10 @@ int kthread_mutex_dealloc(int mutex_id){
 
 int kthread_mutex_lock(int mutex_id){
 	struct kthread_mutex_t *mut;
-	//struct thread *currThread = mythread();
+	struct thread *currThread = mythread();
 
 	acquire(&mtable.lock);
+
 
 	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
         if (mut->mid == mutex_id)
@@ -866,10 +874,10 @@ int kthread_mutex_lock(int mutex_id){
 	}
 
     while (mut->locked) {
-        sleep(mut, &mut->lock);
+        sleep(mut->thread, &mtable.lock);
     }
     mut->locked = 1;
-    mut->thread = mythread();
+    mut->thread = currThread;
 
 	release(&mtable.lock);
 	return 0;
@@ -898,8 +906,9 @@ int kthread_mutex_unlock(int mutex_id){
 	if(mut->locked){
         if(mut->thread == mythread()){			// the calling thread is the owner thread
             mut->locked = 0;
+            wakeup(mut->thread);
             mut->thread = 0;
-            wakeup(mut);
+
 
             release(&mtable.lock);
             return 0;

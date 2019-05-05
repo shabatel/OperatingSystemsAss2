@@ -1,6 +1,7 @@
 #include "types.h"
 #include "user.h"
 #include "spinlock.h"
+#include "kthread.h"
 #include "tournament_tree.h"
 
 //task 3.2
