@@ -22,22 +22,37 @@ exec(char *path, char **argv)
   struct thread *currthread = mythread();
   struct thread *t;
 
-  lockPtable();
+  for(;;) {
+      lockPtable();
 
-  for(t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
-    if (t->tid != currthread->tid)
-      t->killed = 1;
+      for (t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
+          if (t->tid != currthread->tid)
+              t->killed = 1;
+          if (t->state == SLEEPING) {
+              t->state = RUNNABLE;
+          }
+      }
+
+      releasePtable();
+
+      for (t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
+          if (t->tid != currthread->tid) {
+              kthread_join(t->tid);
+          }
+      }
+      lockPtable();
+
+      for (t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
+          if (currthread->tid != t->tid && t->state != T_UNUSED && t->state != T_ZOMBIE)
+              goto found;
+      }
+      releasePtable();
+
+      break;
+
+      found:
+      continue;
   }
-
-  releasePtable();
-
-  for(t = curproc->pthreads; t < &curproc->pthreads[NTHREAD]; t++) {
-    if (t->tid != currthread->tid){
-      kthread_join(t->tid);
-      kthread_join(t->tid);
-    }
-  }
-
   begin_op();
 
   if((ip = namei(path)) == 0){

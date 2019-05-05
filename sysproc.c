@@ -71,7 +71,7 @@ sys_sleep(void)
   while(ticks - ticks0 < n){
     if(mythread()->killed){
       release(&tickslock);
-      kthread_exit();
+//      kthread_exit();
       return -1;
     }
     sleep(&ticks, &tickslock);
