@@ -142,7 +142,7 @@ allocproc(void) {
 	char *sp;
 	struct thread *t;
 
-	    if(!holding(&ptable.lock)) {
+	if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
     }
 
@@ -173,6 +173,7 @@ allocproc(void) {
 	// Allocate kernel stack.
 	if ((t->kstack = kalloc()) == 0) {
 		t->state = T_UNUSED;
+    p->state=UNUSED; // todo CHANGED
 		return 0;
 	}
 	sp = t->kstack + KSTACKSIZE;
@@ -239,9 +240,10 @@ userinit(void) {
 // Grow current process's memory by n bytes.
 // Return 0 on success, -1 on failure.
 int
-growproc(int n) {
+growproc(int n) { // todo need to be synced
 	uint sz;
 	struct proc *curproc = myproc();
+
 
 	sz = curproc->sz;
 	if (n > 0) {
@@ -312,63 +314,65 @@ fork(void) {
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
 void
-exit(void) {
-  struct proc *curproc = myproc();
-  struct thread *currthread = mythread();
+exit(void) {  struct proc *curproc = myproc();
+  struct thread *curthread = mythread();
   struct proc *p;
   int fd;
-      if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
-    }
-  curproc->killed = 1;
-  release(&ptable.lock);
-	if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
-	}
-	int i = countRunnableThreads(curproc);
-  while (i  > 1) {
-		cprintf("num of thread = %d \n", i);
-    sched();
-		i = countRunnableThreads(curproc);
-  }
-  release(&ptable.lock);
-  //countRunnableThreads = 1
+  struct thread *t;
 
-  if (curproc == initproc)
+
+  if(curproc == initproc)
     panic("init exiting");
-  // Close all open files.
-  for (fd = 0; fd < NOFILE; fd++) {
-    if (curproc->ofile[fd]) {
-      fileclose(curproc->ofile[fd]);
-      curproc->ofile[fd] = 0;
-    }
+
+  if(curthread->killed)
+    kthread_exit();
+
+  kill(curproc->pid);
+
+  acquire(&ptable.lock);
+
+  int allZombies = 1;
+  for (int i =0; i<NTHREAD; i++){
+    t = &curproc->pthreads[i];
+    if(t->tid !=mythread()->tid &&( t->state != T_ZOMBIE && t->state != T_UNUSED))
+      allZombies = 0;
   }
-  begin_op();
-  iput(curproc->cwd);
-  end_op();
-  curproc->cwd = 0;
 
-      if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
+  if(allZombies)//this is the last thread to exit!
+  {
+    release(&ptable.lock);
+
+    // Close all open files.
+    for(fd = 0; fd < NOFILE; fd++){
+      if(curproc->ofile[fd]){
+        fileclose(curproc->ofile[fd]);
+        curproc->ofile[fd] = 0;
+      }
     }
-  // Parent might be sleeping in wait().
-  wakeup1(curproc->parent);
 
-  // Pass abandoned children to init.
-  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->parent == curproc) {
-      p->parent = initproc;
-      if (p->state == ZOMBIE) {
-        cprintf("12 \n");
-        wakeup1(initproc);
+    begin_op();
+    iput(curproc->cwd);
+    end_op();
+    curproc->cwd = 0;
+    // Parent might be sleeping in wait().
+    acquire(&ptable.lock);
+
+    wakeup1(curproc->parent);
+    // Pass abandoned children to init.
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent == curproc){
+        p->parent = initproc;
+        if(p->state == ZOMBIE)
+          wakeup1(initproc);
       }
     }
   }
-  // Jump into the scheduler, never to return.
+
+
+  curthread->state = T_ZOMBIE;
   curproc->state = ZOMBIE;
-  currthread->state = T_ZOMBIE;
   sched();
-  panic("zombie exit");
+  panic("zombie (exit)");
 }
 
 // Wait for a child process to exit and return its pid.
@@ -392,14 +396,6 @@ wait(void)
 		continue;
 	  havekids = 1;
 	  if(p->state == ZOMBIE){
-		// Found one.
-		for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
-		  if(t->state == T_ZOMBIE){
-			t->tid = 0;
-			  kfree(t->kstack);
-			  t->kstack=0;
-		  }
-		}
 		pid = p->pid;
 		freevm(p->pgdir);
 		p->pid = 0;
@@ -407,6 +403,14 @@ wait(void)
 		p->name[0] = 0;
 		p->killed = 0;
 		p->state = UNUSED;
+          // Found one.
+          for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
+              if(t->state == T_ZOMBIE){
+                  t->tid = 0;
+                  kfree(t->kstack);
+                  t->kstack=0;
+              }
+          }
 		release(&ptable.lock);
 		return pid;
 	  }
@@ -507,12 +511,13 @@ sched(void)
 void
 yield(void)
 {
-	if(mythread()->killed){
-		kthread_exit();
-	}
+//	if(mythread()->killed){
+//		kthread_exit();
+//	}
       if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
     }  //DOC: yieldlock
+    myproc()->state = INUSED;
   mythread()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
@@ -544,10 +549,10 @@ forkret(void)
 void
 sleep(void *chan, struct spinlock *lk)
 {
-	struct proc *p = myproc();
+//	struct proc *p = myproc();
   struct thread *t = mythread();
   
-  if(p == 0)
+  if(t == 0)
 	panic("sleep");
 
   if(lk == 0)
@@ -591,13 +596,13 @@ wakeup1(void *chan)
   struct thread *t;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-	if(p->state == INUSED){
+//	if(p->state == INUSED){
 	  for(t = p->pthreads; t < &p->pthreads[NTHREAD] ; t++){
 		if(t->state == SLEEPING && t->chan == chan){
 		  t->state = RUNNABLE;
 		}
 	  }
-	}
+//	}
   }
 }
 
@@ -617,26 +622,25 @@ wakeup(void *chan)
 // to user space (see trap in trap.c).
 int
 kill(int pid) {
-	struct proc *p;
+  struct proc *p;
+  int i;
 
-	    if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      // Wake process from sleep if necessary.
+      for(i = 0; i< NTHREAD; i++)
+      {
+        p->pthreads[i].killed = 1;
+        if(p->pthreads[i].state == SLEEPING)
+          p->pthreads[i].state = RUNNABLE;
+      }
+      release(&ptable.lock);
+      return 0;
     }
-	for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-		if (p->pid == pid) {
-			p->killed = 1;
-			struct thread *t;
-			for (t = p->pthreads; t < &p->pthreads[NTHREAD]; t++) {
-				if (t->state == SLEEPING)
-					t->state = RUNNABLE;
-			}
-			// Wake process from sleep if necessary.
-			release(&ptable.lock);
-			return 0;
-		}
-	}
-	release(&ptable.lock);
-	return -1;
+  }
+  release(&ptable.lock);
+  return -1;
 }
 
 //PAGEBREAK: 36
@@ -699,10 +703,12 @@ int kthread_create(void (*start_func)(), void* stack) {
       acquire(&ptable.lock);
     }
   t = searchThreadByStatus(myproc(), T_UNUSED);
-  if(t == 0) { // no space available to use
-    return -1;
-  }
-  t->state = T_EMBRYO;
+      if(t == 0){
+          release(&ptable.lock);
+          return -1;
+      }
+      t->killed = 0;
+//  t->state = T_EMBRYO;
   t->tid = nexttid++;
   t->proc = curproc;
   release(&ptable.lock);
@@ -728,21 +734,14 @@ int kthread_create(void (*start_func)(), void* stack) {
   memset(t->context, 0, sizeof *t->context);
   t->context->eip = (uint)forkret;
 
-  //init thread trapframe
-  memset(t->tf, 0, sizeof(*t->tf));
-  t->tf->cs = (SEG_UCODE << 3) | DPL_USER;
-  t->tf->ds = (SEG_UDATA << 3) | DPL_USER;
-  t->tf->es = t->tf->ds;
-  t->tf->ss = t->tf->ds;
-  t->tf->eflags = FL_IF;
-  //struct thread *currthread = mythread();
-  //*t->tf = *currthread->tf;
+  struct thread *currthread = mythread();
+  *t->tf = *currthread->tf;
 
   t->tf->esp = (uint)stack;
   t->tf->eip = (uint)start_func; // beginning of initcode.S
-      if(!holding(&ptable.lock)) {
+  if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
-    }
+  }
   t->state = RUNNABLE;
   release(&ptable.lock);
 
@@ -755,26 +754,26 @@ int kthread_id() {
 
 void kthread_exit() {
   struct proc *curproc = myproc();
-  struct thread *currThread = mythread();
+  struct thread *curthread = mythread();
+  struct proc *p;
+  int fd;
+  struct thread *t;
 
-  if (countRunnableThreads(curproc) > 1) {
-    if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
-    }
+  acquire(&ptable.lock);
 
-    currThread->state = T_ZOMBIE;
-    wakeup1(currThread);
+  int allZombies = 1;
+  for (int i =0; i<NTHREAD; i++){
+    t = &curproc->pthreads[i];
+    if(t->tid !=mythread()->tid &&( t->state != T_ZOMBIE && t->state != T_UNUSED))
+      allZombies = 0;
+  }
 
-    sched();
-  } else {
-
-    if (curproc == initproc)
-      panic("init exiting");
-
-    int fd;
+  if(allZombies)//this is the last thread to exit!
+  {
+    release(&ptable.lock);
     // Close all open files.
-    for (fd = 0; fd < NOFILE; fd++) {
-      if (curproc->ofile[fd]) {
+    for(fd = 0; fd < NOFILE; fd++){ //must do this part without locking!
+      if(curproc->ofile[fd]){
         fileclose(curproc->ofile[fd]);
         curproc->ofile[fd] = 0;
       }
@@ -784,30 +783,28 @@ void kthread_exit() {
     iput(curproc->cwd);
     end_op();
     curproc->cwd = 0;
-        if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
-    }
-
     // Parent might be sleeping in wait().
+    acquire(&ptable.lock);
+
     wakeup1(curproc->parent);
-
-    struct proc *p;
     // Pass abandoned children to init.
-    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-
-      if (p->parent == curproc) {
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent == curproc){
         p->parent = initproc;
-        if (p->state == ZOMBIE) {
+        if(p->state == ZOMBIE)
           wakeup1(initproc);
-        }
       }
     }
-    // Jump into the scheduler, never to return.
-    curproc->state = ZOMBIE;
-    currThread->state = T_ZOMBIE;
-    sched();
-    panic("k thread zombie exit");
   }
+
+  //curthread->killed = 1; no need to change beacuse we change it only in kill
+  curthread->state = T_ZOMBIE;
+  if(allZombies == 1) // if the proccess need to die
+    curproc->state = ZOMBIE;
+  wakeup1(curthread);
+  sched();
+  panic("zombie (exit)");
+
 }
 
 int kthread_join(int thread_id) {
@@ -835,52 +832,41 @@ int kthread_join(int thread_id) {
     return -1;
   }
 
-
-  if(t->state == T_ZOMBIE){
-		kfree(t->kstack);
-		t->kstack = 0;
-    t->killed = 0;
-    t->tid = 0;
-		t->state = T_UNUSED;
-		release(&ptable.lock);
-
-    return 0;
+  while ((t->state != T_ZOMBIE) && (t->state != T_UNUSED)) {
+    sleep(t, &ptable.lock);
+    if (currProc->killed != 0) {
+      release(&ptable.lock);
+      return -1;
+    }
   }
 
-	if (t->state != T_UNUSED) {
-		sleep(t, &ptable.lock);
-    kfree(t->kstack);
-    t->kstack = 0;
-    t->killed = 0;
-    t->tid = 0;
-    t->state = T_UNUSED;
-
-    release(&ptable.lock);
-    return 0;
+  if (t->state == T_ZOMBIE) {
+      t->tid = 0;
+      t->state = UNUSED;
+      kfree(t->kstack);
+      t->kstack = 0;
+      t->killed = 0;
   }
-
   release(&ptable.lock);
 
-  return -1;
+  return 0;
 }
 
 int kthread_mutex_alloc(){
 	struct kthread_mutex_t *mut;
-
 	acquire(&mtable.lock);
-
 	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++)
 		if (mut->state == M_UNUSED)
 			goto found;
 
-	release(&ptable.lock);
+	release(&mtable.lock);
 	return -1;
 
 	found:
 	mut->state = M_INUSE;
 	mut->locked = 0;
 	mut->mid = nextmid++;
-	mut->thread = mythread();
+//	mut->thread = mythread();
 
 	release(&mtable.lock);
 
@@ -894,12 +880,21 @@ int kthread_mutex_dealloc(int mutex_id){
 
 	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++){
 		if (mut->mid == mutex_id){
-			if(!(mut->locked)){						//The given mutex is currently unlocked
+			if(mut->locked || mut->state == M_UNUSED || mut->thread != 0){
+                release(&mtable.lock);					// dealloc failed
+                return -1;
+			}
+
+
+
+//		    if(!(mut->locked) && mut->state != M_UNUSED && mut->thread == 0){			//we can dealloc the mutex
 				mut->state = M_UNUSED;
 				mut->thread = 0;
+				mut->mid = 0;
+				mut->locked = 0;
 				release(&mtable.lock);
 				return 0;
-			}
+//			}
 		}
 	}
 	release(&mtable.lock);					// dealloc failed
@@ -908,9 +903,10 @@ int kthread_mutex_dealloc(int mutex_id){
 
 int kthread_mutex_lock(int mutex_id){
 	struct kthread_mutex_t *mut;
-	//struct thread *currThread = mythread();
+	struct thread *currThread = mythread();
 
 	acquire(&mtable.lock);
+
 
 	for (mut = mtable.mutex_arr ; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++) {
         if (mut->mid == mutex_id)
@@ -927,10 +923,10 @@ int kthread_mutex_lock(int mutex_id){
 	}
 
     while (mut->locked) {
-        sleep(mut, &mut->lock);
+        sleep(mut->thread, &mtable.lock);
     }
     mut->locked = 1;
-    mut->thread = mythread();
+    mut->thread = currThread;
 
 	release(&mtable.lock);
 	return 0;
@@ -959,8 +955,9 @@ int kthread_mutex_unlock(int mutex_id){
 	if(mut->locked){
         if(mut->thread == mythread()){			// the calling thread is the owner thread
             mut->locked = 0;
+            wakeup(mut->thread);
             mut->thread = 0;
-            wakeup(mut);
+
 
             release(&mtable.lock);
             return 0;

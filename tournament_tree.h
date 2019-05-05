@@ -1,14 +1,9 @@
-#define MAX_STACK_SIZE 4000
-#define MAX_MUTEXES 64
 
-struct trnmnt_tree {
+typedef struct trnmnt_tree {
   int size;
-  int* threadNodes;
-  int* mutexNodes;
-  int currentNumberOfThreads;
-  int currentNumberOfWaitings;
-  //struct spinlock lock;
-};
+  int* mutexNodes;      //mutexes id
+  int* threadNodes;     //thread id nodes
+}trnmnt_tree;
 
 
 struct trnmnt_tree* trnmnt_tree_alloc(int depth);
