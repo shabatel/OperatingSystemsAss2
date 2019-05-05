@@ -47,7 +47,7 @@ int countRunnableThreads(struct proc *p)
 		if (t->state != T_UNUSED && t->state != T_ZOMBIE)
 			counter++;
 		else {
-			t->killed = 0;
+			t->killed = 1;
   	}
 	}
   return counter;
@@ -317,11 +317,8 @@ exit(void) {
   struct thread *currthread = mythread();
   struct proc *p;
   int fd;
-      if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
-    }
-  curproc->killed = 1;
-  release(&ptable.lock);
+
+    kill(curproc->pid);
 	if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
 	}
@@ -359,7 +356,6 @@ exit(void) {
     if (p->parent == curproc) {
       p->parent = initproc;
       if (p->state == ZOMBIE) {
-        cprintf("12 \n");
         wakeup1(initproc);
       }
     }
@@ -507,12 +503,13 @@ sched(void)
 void
 yield(void)
 {
-	if(mythread()->killed){
-		kthread_exit();
-	}
+//	if(mythread()->killed){
+//		kthread_exit();
+//	}
       if(!holding(&ptable.lock)) {
       acquire(&ptable.lock);
     }  //DOC: yieldlock
+    myproc()->state = INUSED;
   mythread()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
@@ -544,10 +541,10 @@ forkret(void)
 void
 sleep(void *chan, struct spinlock *lk)
 {
-	struct proc *p = myproc();
+//	struct proc *p = myproc();
   struct thread *t = mythread();
   
-  if(p == 0)
+  if(t == 0)
 	panic("sleep");
 
   if(lk == 0)
@@ -751,38 +748,38 @@ int kthread_id() {
 }
 
 void kthread_exit() {
-  struct proc *curproc = myproc();
-  struct thread *currThread = mythread();
+    struct proc *curproc = myproc();
+    struct thread *currThread = mythread();
 
-  if (countRunnableThreads(curproc) > 1) {
-    if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
+    while (countRunnableThreads(curproc) > 1) {
+        if(!holding(&ptable.lock)) {
+            acquire(&ptable.lock);
+        }
+
+        currThread->state = T_ZOMBIE;
+        wakeup1(currThread);
+
+        sched();
     }
 
-    currThread->state = T_ZOMBIE;
-    wakeup1(currThread);
-
-    sched();
-  } else {
-
     if (curproc == initproc)
-      panic("init exiting");
+        panic("init exiting");
 
     int fd;
     // Close all open files.
     for (fd = 0; fd < NOFILE; fd++) {
-      if (curproc->ofile[fd]) {
-        fileclose(curproc->ofile[fd]);
-        curproc->ofile[fd] = 0;
-      }
+        if (curproc->ofile[fd]) {
+            fileclose(curproc->ofile[fd]);
+            curproc->ofile[fd] = 0;
+        }
     }
 
     begin_op();
     iput(curproc->cwd);
     end_op();
     curproc->cwd = 0;
-        if(!holding(&ptable.lock)) {
-      acquire(&ptable.lock);
+    if(!holding(&ptable.lock)) {
+        acquire(&ptable.lock);
     }
 
     // Parent might be sleeping in wait().
@@ -792,19 +789,19 @@ void kthread_exit() {
     // Pass abandoned children to init.
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
 
-      if (p->parent == curproc) {
-        p->parent = initproc;
-        if (p->state == ZOMBIE) {
-          wakeup1(initproc);
+        if (p->parent == curproc) {
+            p->parent = initproc;
+            if (p->state == ZOMBIE) {
+
+                wakeup1(initproc);
+            }
         }
-      }
     }
     // Jump into the scheduler, never to return.
     curproc->state = ZOMBIE;
     currThread->state = T_ZOMBIE;
     sched();
     panic("k thread zombie exit");
-  }
 }
 
 int kthread_join(int thread_id) {
@@ -833,6 +830,8 @@ int kthread_join(int thread_id) {
   }
 
   if (t->state == T_ZOMBIE) {				//TODO: add release?
+
+      release(&ptable.lock);
     return 0;
   }
 
@@ -851,7 +850,6 @@ int kthread_join(int thread_id) {
 
 int kthread_mutex_alloc(){
 	struct kthread_mutex_t *mut;
-
 	acquire(&mtable.lock);
 
 	for (mut = mtable.mutex_arr; mut < &mtable.mutex_arr[MAX_MUTEXES]; mut++)
